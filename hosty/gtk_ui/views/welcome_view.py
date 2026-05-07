@@ -29,9 +29,9 @@ class WelcomeView(Gtk.Box):
         self.append(self._toolbar_view)
         
         # Header bar with window controls
-        header = Adw.HeaderBar()
-        header.set_title_widget(Gtk.Label(label="Hosty"))
-        self._toolbar_view.add_top_bar(header)
+        self._header = Adw.HeaderBar()
+        self._header.set_title_widget(Gtk.Label(label="Hosty"))
+        self._toolbar_view.add_top_bar(self._header)
 
         # Use an explicit centered layout so the icon is rendered at a fixed size
         # without extra scaling from StatusPage internals.
@@ -80,3 +80,7 @@ class WelcomeView(Gtk.Box):
 
         content.append(btn)
         self._toolbar_view.set_content(content)
+
+    @property
+    def header(self) -> Adw.HeaderBar:
+        return self._header

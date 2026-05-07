@@ -24,6 +24,7 @@ from gi.repository import Gtk, Adw, Gdk, GLib
 from hosty.shared.backend.playit_config import load_playit_config, save_playit_config
 from hosty.shared.backend.server_manager import ServerInfo, ServerManager
 from hosty.gtk_ui.dialogs.playit_setup import PlayitSetupDialog
+from hosty.gtk_ui.dialogs.manage_playit_tunnel import ManagePlayitTunnelDialog
 
 
 PLAYIT_DASHBOARD_URL = "https://playit.gg/account/tunnels"
@@ -126,16 +127,12 @@ class PlayitMixin:
             self._java_tunnel_action_btn.remove_css_class("pill")
             self._java_tunnel_action_btn.add_css_class("flat")
             self._java_tunnel_action_btn.set_sensitive(False)
-            self._delete_java_tunnel_btn.set_sensitive(False)
-            self._delete_java_tunnel_btn.set_visible(False)
             self._bedrock_tunnel_action_btn.set_label("")
             self._bedrock_tunnel_action_btn.set_icon_name("list-add-symbolic")
             self._bedrock_tunnel_action_btn.set_tooltip_text("Add Bedrock tunnel")
             self._bedrock_tunnel_action_btn.remove_css_class("pill")
             self._bedrock_tunnel_action_btn.add_css_class("flat")
             self._bedrock_tunnel_action_btn.set_sensitive(False)
-            self._delete_bedrock_tunnel_btn.set_sensitive(False)
-            self._delete_bedrock_tunnel_btn.set_visible(False)
             self._tunnel_btn.set_label("Start Agent")
             self._tunnel_btn.remove_css_class("destructive-action")
             self._tunnel_btn.add_css_class("suggested-action")
@@ -199,37 +196,29 @@ class PlayitMixin:
 
         if java_endpoint:
             self._java_tunnel_action_btn.set_label("")
-            self._java_tunnel_action_btn.set_icon_name("view-refresh-symbolic")
-            self._java_tunnel_action_btn.set_tooltip_text("Regenerate Java tunnel")
+            self._java_tunnel_action_btn.set_icon_name("emblem-system-symbolic")
+            self._java_tunnel_action_btn.set_tooltip_text("Manage Java tunnel")
             self._java_tunnel_action_btn.remove_css_class("pill")
             self._java_tunnel_action_btn.add_css_class("flat")
-            self._delete_java_tunnel_btn.set_visible(True)
-            self._delete_java_tunnel_btn.set_sensitive(True)
         else:
             self._java_tunnel_action_btn.set_label("")
             self._java_tunnel_action_btn.set_icon_name("list-add-symbolic")
             self._java_tunnel_action_btn.set_tooltip_text("Add Java tunnel")
             self._java_tunnel_action_btn.remove_css_class("flat")
             self._java_tunnel_action_btn.add_css_class("flat")
-            self._delete_java_tunnel_btn.set_visible(False)
-            self._delete_java_tunnel_btn.set_sensitive(False)
 
         if bedrock_endpoint:
             self._bedrock_tunnel_action_btn.set_label("")
-            self._bedrock_tunnel_action_btn.set_icon_name("view-refresh-symbolic")
-            self._bedrock_tunnel_action_btn.set_tooltip_text("Regenerate Bedrock tunnel")
+            self._bedrock_tunnel_action_btn.set_icon_name("emblem-system-symbolic")
+            self._bedrock_tunnel_action_btn.set_tooltip_text("Manage Bedrock tunnel")
             self._bedrock_tunnel_action_btn.remove_css_class("pill")
             self._bedrock_tunnel_action_btn.add_css_class("flat")
-            self._delete_bedrock_tunnel_btn.set_visible(True)
-            self._delete_bedrock_tunnel_btn.set_sensitive(True)
         else:
             self._bedrock_tunnel_action_btn.set_label("")
             self._bedrock_tunnel_action_btn.set_icon_name("list-add-symbolic")
             self._bedrock_tunnel_action_btn.set_tooltip_text("Add Bedrock tunnel")
             self._bedrock_tunnel_action_btn.remove_css_class("flat")
             self._bedrock_tunnel_action_btn.add_css_class("flat")
-            self._delete_bedrock_tunnel_btn.set_visible(False)
-            self._delete_bedrock_tunnel_btn.set_sensitive(False)
 
         tunnel_actions_locked = bool(
             playit.is_running
@@ -239,9 +228,6 @@ class PlayitMixin:
         )
         self._java_tunnel_action_btn.set_sensitive(not tunnel_actions_locked)
         self._bedrock_tunnel_action_btn.set_sensitive(not tunnel_actions_locked)
-        if tunnel_actions_locked:
-            self._delete_java_tunnel_btn.set_sensitive(False)
-            self._delete_bedrock_tunnel_btn.set_sensitive(False)
 
         if self._start_in_progress:
             self._tunnel_btn.set_label("Starting Agent...")
@@ -441,7 +427,13 @@ class PlayitMixin:
             threading.Thread(target=run, daemon=True).start()
 
         if had_java_tunnel:
-            self._confirm_regenerate_tunnel("Java", start_operation)
+            server_port = self._server_manager.playit_manager._read_server_port(server_dir)
+            dialog = ManagePlayitTunnelDialog(
+                "Java", "Minecraft Java (TCP)", server_port, str(self._cfg.get("java_endpoint", "")).strip()
+            )
+            dialog.connect("regenerate", lambda *_: self._confirm_regenerate_tunnel("Java", start_operation))
+            dialog.connect("delete", lambda *_: self._on_delete_java_tunnel())
+            dialog.present(self.get_root())
             return
 
         start_operation()
@@ -507,7 +499,12 @@ class PlayitMixin:
             threading.Thread(target=run, daemon=True).start()
 
         if had_bedrock_tunnel:
-            self._confirm_regenerate_tunnel("Bedrock", start_operation)
+            dialog = ManagePlayitTunnelDialog(
+                "Bedrock", "Minecraft Bedrock (UDP)", 19132, str(self._cfg.get("bedrock_endpoint", "")).strip()
+            )
+            dialog.connect("regenerate", lambda *_: self._confirm_regenerate_tunnel("Bedrock", start_operation))
+            dialog.connect("delete", lambda *_: self._on_delete_bedrock_tunnel())
+            dialog.present(self.get_root())
             return
 
         start_operation()

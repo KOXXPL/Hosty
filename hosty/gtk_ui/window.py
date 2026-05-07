@@ -6,7 +6,7 @@ import threading
 import gi
 gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
-from gi.repository import Gtk, Adw, GLib
+from gi.repository import Gtk, Adw, GLib, GObject
 
 from hosty.shared.backend.playit_config import load_playit_config
 from hosty.shared.backend.server_manager import ServerManager
@@ -35,19 +35,15 @@ class HostyWindow(Adw.ApplicationWindow):
         # Toast overlay wraps everything
         self._toast_overlay = Adw.ToastOverlay()
         
-        # NavigationSplitView
-        self._split_view = Adw.NavigationSplitView()
+        # OverlaySplitView
+        self._split_view = Adw.OverlaySplitView()
+        self._split_view.set_pin_sidebar(True)
+        self._split_view.set_show_sidebar(True)
         
         # ===== Sidebar =====
         self._sidebar = Sidebar(server_manager)
         self._sidebar.connect('server-selected', self._on_server_selected)
-        
-        sidebar_page = Adw.NavigationPage(
-            title="Servers",
-            child=self._sidebar,
-        )
-        self._sidebar_page = sidebar_page
-        self._split_view.set_sidebar(sidebar_page)
+        self._split_view.set_sidebar(self._sidebar)
         
         # ===== Content =====
         self._content_stack = Gtk.Stack()
@@ -62,12 +58,7 @@ class HostyWindow(Adw.ApplicationWindow):
         self._detail_view = ServerDetailView(server_manager)
         self._content_stack.add_named(self._detail_view, "detail")
         
-        # Content wrapper with navigation page
-        content_page = Adw.NavigationPage(
-            title="Server",
-            child=self._content_stack,
-        )
-        self._split_view.set_content(content_page)
+        self._split_view.set_content(self._content_stack)
         
         # Responsive breakpoint
         breakpoint = Adw.Breakpoint.new(
@@ -78,6 +69,27 @@ class HostyWindow(Adw.ApplicationWindow):
         
         self._toast_overlay.set_child(self._split_view)
         self.set_content(self._toast_overlay)
+
+        # Sidebar toggle buttons for desktop mode
+        self._welcome_sidebar_toggle = Gtk.ToggleButton()
+        self._welcome_sidebar_toggle.set_icon_name("sidebar-show-symbolic")
+        self._welcome_sidebar_toggle.set_tooltip_text("Toggle Sidebar")
+        self._welcome_view.header.pack_start(self._welcome_sidebar_toggle)
+        
+        self._detail_sidebar_toggle = Gtk.ToggleButton()
+        self._detail_sidebar_toggle.set_icon_name("sidebar-show-symbolic")
+        self._detail_sidebar_toggle.set_tooltip_text("Toggle Sidebar")
+        self._detail_view.header.pack_start(self._detail_sidebar_toggle)
+        
+        # Bind toggles to show-sidebar property
+        self._split_view.bind_property(
+            "show-sidebar", self._welcome_sidebar_toggle, "active",
+            GObject.BindingFlags.BIDIRECTIONAL | GObject.BindingFlags.SYNC_CREATE
+        )
+        self._split_view.bind_property(
+            "show-sidebar", self._detail_sidebar_toggle, "active",
+            GObject.BindingFlags.BIDIRECTIONAL | GObject.BindingFlags.SYNC_CREATE
+        )
         
         # Show welcome or auto-select first server immediately to avoid welcome flicker.
         if server_manager.servers:
@@ -134,9 +146,9 @@ class HostyWindow(Adw.ApplicationWindow):
             self._detail_view.load_server(server_info)
             self._content_stack.set_visible_child_name("detail")
             
-            # Show content in collapsed mode
+            # Hide sidebar in collapsed mode
             if self._split_view.get_collapsed():
-                self._split_view.set_show_content(True)
+                self._split_view.set_show_sidebar(False)
     
     def _on_server_added(self, manager, server_id):
         """Handle new server added - switch to it."""

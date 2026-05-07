@@ -78,7 +78,7 @@ class ServerDetailView(Gtk.Box):
 
         self._add_lazy_tab("console", "Console", "utilities-terminal-symbolic")
         self._add_lazy_tab("connect", "Connect", "network-workgroup-symbolic")
-        self._add_lazy_tab("performance", "Performance", "computer-symbolic")
+        self._add_lazy_tab("performance", "Performance", "power-profile-performance-symbolic")
         self._add_lazy_tab("properties", "Properties", "emblem-system-symbolic")
         self._add_lazy_tab("files", "Files", "folder-symbolic")
         self._view_stack.set_visible_child_name("connect")
@@ -407,3 +407,7 @@ class ServerDetailView(Gtk.Box):
     
     def get_files_view(self) -> FilesView:
         return self._ensure_files_view()
+
+    @property
+    def header(self) -> Adw.HeaderBar:
+        return self._header
