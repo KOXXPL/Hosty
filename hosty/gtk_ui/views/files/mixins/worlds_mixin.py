@@ -29,6 +29,8 @@ from gi.repository import Gtk, Adw, Gio, GLib, Pango, Gdk, GdkPixbuf
 
 from hosty.shared.backend.config_manager import ConfigManager
 from hosty.shared.backend.server_manager import ServerManager, ServerInfo
+from hosty.shared.utils.constants import LEVEL_TYPE_NAMES, LEVEL_TYPES
+from hosty.shared.utils.nbt_utils import get_world_info
 
 
 
@@ -46,15 +48,33 @@ class WorldsMixin:
         except Exception:
             return ""
 
+    def _configured_world_type(self) -> str:
+        if not self._server_info:
+            return ""
+
+        try:
+            cfg = ConfigManager(self._server_info.server_dir)
+            cfg.load()
+            return str(cfg.get("level-type", "")).strip()
+        except Exception:
+            return ""
+
     def _make_world_row(self, path: Path) -> Adw.ActionRow:
         dims = _world_dimension_dirs(path)
         row_title = "World" if path.name == "world" else path.name
         row = Adw.ActionRow(title=row_title)
-        seed = _world_seed(path) or self._configured_world_seed()
         
+        seed, wtype = get_world_info(path)
+        if not seed:
+            seed = self._configured_world_seed()
+        if not wtype:
+            wtype = self._configured_world_type()
+            
         subtitle_parts = []
         if seed:
             subtitle_parts.append(seed)
+        if wtype:
+            subtitle_parts.append(LEVEL_TYPE_NAMES.get(wtype, wtype))
         if not dims:
             subtitle_parts.append("0 dimensions")
         else:
@@ -82,19 +102,32 @@ class WorldsMixin:
     def _build_world_page(self, path: Path, show_controls: bool = False) -> Gtk.Widget:
         page = Adw.PreferencesPage()
 
-        # Seed row
-        seed = _world_seed(path) or self._configured_world_seed()
-        if seed:
-            seed_group = Adw.PreferencesGroup(title="Seed")
-            seed_row = Adw.ActionRow(title="World Seed", subtitle=seed)
-            copy_btn = self._icon_button(
-                "edit-copy-symbolic",
-                "Copy world seed",
-                lambda *_p, s=seed: self._copy_world_seed(s),
-            )
-            seed_row.add_suffix(copy_btn)
-            seed_group.add(seed_row)
-            page.add(seed_group)
+        # World Info
+        seed, wtype = get_world_info(path)
+        if not seed:
+            seed = self._configured_world_seed()
+        if not wtype:
+            wtype = self._configured_world_type()
+
+        if seed or wtype:
+            info_group = Adw.PreferencesGroup(title="World Info")
+            
+            if seed:
+                seed_row = Adw.ActionRow(title="World Seed", subtitle=seed)
+                copy_btn = self._icon_button(
+                    "edit-copy-symbolic",
+                    "Copy world seed",
+                    lambda *_p, s=seed: self._copy_world_seed(s),
+                )
+                seed_row.add_suffix(copy_btn)
+                info_group.add(seed_row)
+                
+            if wtype:
+                display_type = LEVEL_TYPE_NAMES.get(wtype, wtype)
+                type_row = Adw.ActionRow(title="World Type", subtitle=display_type)
+                info_group.add(type_row)
+                
+            page.add(info_group)
 
         # Actions
         actions_group = Adw.PreferencesGroup(title="Actions")
@@ -177,11 +210,27 @@ class WorldsMixin:
             self._alert("No server selected", "Select a server before resetting the world.")
             return
 
+        seed, wtype = get_world_info(path)
+        if not seed:
+            seed = self._configured_world_seed()
+        if not wtype:
+            wtype = self._configured_world_type()
+
         seed_group = Adw.PreferencesGroup()
         seed_row = Adw.EntryRow(title="Seed")
-        seed_row.set_text(_world_seed(path) or self._configured_world_seed())
+        seed_row.set_text(seed)
         seed_row.set_show_apply_button(False)
         seed_group.add(seed_row)
+
+        type_row = Adw.ComboRow(title="World Type")
+        type_model = Gtk.StringList.new([LEVEL_TYPE_NAMES.get(t, t) for t in LEVEL_TYPES])
+        type_row.set_model(type_model)
+        try:
+            idx = LEVEL_TYPES.index(wtype) if wtype else 0
+        except ValueError:
+            idx = 0
+        type_row.set_selected(idx)
+        seed_group.add(type_row)
 
         dialog = Adw.AlertDialog()
         dialog.set_heading("Reset world")
@@ -196,10 +245,15 @@ class WorldsMixin:
         def on_response(_dialog, response):
             if response != "reset":
                 return
+                
+            selected_type_idx = type_row.get_selected()
+            selected_type = LEVEL_TYPES[selected_type_idx] if selected_type_idx < len(LEVEL_TYPES) else ""
+            
             ok, msg = self._server_manager.create_world_folder(
                 self._server_info.id,
                 "world",
-                seed_row.get_text().strip(),
+                seed=seed_row.get_text().strip(),
+                level_type=selected_type,
             )
             if ok:
                 self._toast("World reset")
@@ -235,8 +289,7 @@ class WorldsMixin:
         confirm = Adw.AlertDialog()
         confirm.set_heading("Import world folder?")
         confirm.set_body(
-            "The imported world's type must match this server's World Type setting "
-            "(normal, superflat, amplified, etc.). Hosty will replace the existing world with a single folder named world."
+            "Hosty will replace the existing world with a the imported folder."
         )
         confirm.add_response("cancel", "Cancel")
         confirm.add_response("import", "Import")

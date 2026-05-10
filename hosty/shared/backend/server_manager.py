@@ -405,7 +405,7 @@ class ServerManager(EventEmitter):
             suffix += 1
         return candidate
 
-    def create_world_folder(self, server_id: str, name: str, seed: str = "") -> tuple[bool, str]:
+    def create_world_folder(self, server_id: str, name: str, seed: str = "", level_type: str = "") -> tuple[bool, str]:
         """Create/select a new world folder and configure the server to generate it."""
         info = self.get_server(server_id)
         if not info:
@@ -436,6 +436,8 @@ class ServerManager(EventEmitter):
             cfg.load()
             cfg.set_value("level-name", "world")
             cfg.set_value("level-seed", seed.strip())
+            if level_type:
+                cfg.set_value("level-type", level_type)
             cfg.save()
         except Exception as e:
             return False, str(e)

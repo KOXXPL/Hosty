@@ -147,36 +147,33 @@ def get_world_type(world_dir: Path) -> str:
             if gn == "default": return "minecraft\\:normal"
             
         # Modern
-        wgs = lower_map.get("worldgensettings")
-        if isinstance(wgs, dict):
-            wgs_lower = {str(k).casefold(): v for k, v in wgs.items()}
-            dims = wgs_lower.get("dimensions")
-            if isinstance(dims, dict):
-                dims_lower = {str(k).casefold(): v for k, v in dims.items()}
-                overworld = dims_lower.get("minecraft:overworld") or dims_lower.get("overworld")
-                if isinstance(overworld, dict):
-                    ow_lower = {str(k).casefold(): v for k, v in overworld.items()}
-                    gen = ow_lower.get("generator")
-                    if isinstance(gen, dict):
-                        gen_lower = {str(k).casefold(): v for k, v in gen.items()}
-                        t = str(gen_lower.get("type", "")).lower()
-                        if t == "minecraft:flat" or t == "flat":
-                            return "minecraft\\:flat"
-                        if t == "minecraft:noise" or t == "noise":
-                            s = str(gen_lower.get("settings", "")).lower()
-                            if "amplified" in s: return "minecraft\\:amplified"
-                            if "large_biomes" in s: return "minecraft\\:large_biomes"
+        dims = lower_map.get("dimensions")
+        if isinstance(dims, dict):
+            dims_lower = {str(k).casefold(): v for k, v in dims.items()}
+            overworld = dims_lower.get("minecraft:overworld") or dims_lower.get("overworld")
+            if isinstance(overworld, dict):
+                ow_lower = {str(k).casefold(): v for k, v in overworld.items()}
+                gen = ow_lower.get("generator")
+                if isinstance(gen, dict):
+                    gen_lower = {str(k).casefold(): v for k, v in gen.items()}
+                    t = str(gen_lower.get("type", "")).lower()
+                    if t == "minecraft:flat" or t == "flat":
+                        return "minecraft\\:flat"
+                    if t == "minecraft:noise" or t == "noise":
+                        s = str(gen_lower.get("settings", "")).lower()
+                        if "amplified" in s: return "minecraft\\:amplified"
+                        if "large_biomes" in s: return "minecraft\\:large_biomes"
+                        
+                        bs = gen_lower.get("biome_source", {})
+                        if isinstance(bs, dict):
+                            bs_lower = {str(k).casefold(): v for k, v in bs.items()}
+                            p = str(bs_lower.get("preset", "")).lower()
+                            if "large_biomes" in p: return "minecraft\\:large_biomes"
+                            if "amplified" in p: return "minecraft\\:amplified"
+                            bst = str(bs_lower.get("type", "")).lower()
+                            if "fixed" in bst or "single" in bst: return "minecraft\\:single_biome_surface"
                             
-                            bs = gen_lower.get("biome_source", {})
-                            if isinstance(bs, dict):
-                                bs_lower = {str(k).casefold(): v for k, v in bs.items()}
-                                p = str(bs_lower.get("preset", "")).lower()
-                                if "large_biomes" in p: return "minecraft\\:large_biomes"
-                                if "amplified" in p: return "minecraft\\:amplified"
-                                bst = str(bs_lower.get("type", "")).lower()
-                                if "fixed" in bst or "single" in bst: return "minecraft\\:single_biome_surface"
-                                
-                            return "minecraft\\:normal"
+                        return "minecraft\\:normal"
                             
         for value in node.values():
             if isinstance(value, dict):

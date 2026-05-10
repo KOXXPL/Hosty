@@ -181,7 +181,7 @@ class CreateServerDialog(Adw.Dialog):
 
         self._world_import_row = Adw.ActionRow(
             title="Import world folder",
-            subtitle="No world selected. Imported world's type must match World type.",
+            subtitle="No world selected.",
         )
         self._choose_world_btn = Gtk.Button(valign=Gtk.Align.CENTER)
         self._choose_world_btn.add_css_class("flat")
@@ -639,7 +639,7 @@ class CreateServerDialog(Adw.Dialog):
             config.set_eula(True)
 
             if world_import_source_path:
-                self._update_progress(0.90, "Importing world folder...", "World type must match the imported world")
+                self._update_progress(0.90, "Importing world folder...")
                 success, msg = self._server_manager.import_world_folder(
                     server_info.id,
                     world_import_source_path,
