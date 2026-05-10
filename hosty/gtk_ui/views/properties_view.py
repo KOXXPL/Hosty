@@ -105,14 +105,7 @@ class PropertiesView(Gtk.Box):
         # ===== World Group =====
         world = Adw.PreferencesGroup(title="World")
         
-        self._widgets["level-seed"] = self._add_entry_row(
-            world, "World Seed", "level-seed", ""
-        )
-        self._widgets["level-type"] = self._add_combo_row(
-            world, "World Type", "level-type",
-            [LEVEL_TYPE_NAMES.get(t, t) for t in LEVEL_TYPES],
-            "Default"
-        )
+        # level-type is now read-only in the World Manager
         self._widgets["view-distance"] = self._add_spin_row(
             world, "View Distance", "view-distance", 2, 32, 10
         )
@@ -314,15 +307,7 @@ class PropertiesView(Gtk.Box):
                         widget.set_selected(idx)
                     except ValueError:
                         widget.set_selected(0)
-                # For level-type, map from raw value to display name
-                elif key == "level-type":
-                    val = self._config.get(key, "")
-                    display_val = LEVEL_TYPE_NAMES.get(val, val)
-                    try:
-                        idx = options.index(display_val)
-                        widget.set_selected(idx)
-                    except ValueError:
-                        widget.set_selected(0)
+
                 else:
                     val = self._config.get(key, "")
                     try:
@@ -361,14 +346,7 @@ class PropertiesView(Gtk.Box):
                     else:
                         self._config.set_value("difficulty", val)
                         self._config.set_value("hardcore", False)
-                elif key == "level-type":
-                    # Map display name back to raw value
-                    display_name = options[idx] if idx < len(options) else options[0]
-                    raw_val = next(
-                        (k for k, v in LEVEL_TYPE_NAMES.items() if v == display_name),
-                        LEVEL_TYPES[0]
-                    )
-                    self._config.set_value(key, raw_val)
+
                 else:
                     val = options[idx] if idx < len(options) else options[0]
                     self._config.set_value(key, val)
