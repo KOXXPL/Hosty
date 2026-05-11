@@ -143,7 +143,14 @@ class BackupsPage(QWidget):
         title.setProperty("class", "title")
         text_col.addWidget(title)
 
-        sub = QLabel(f"{_format_size(st.st_size)} · {_format_mtime(st.st_mtime)}")
+        version_str = ""
+        if zip_path.name.startswith("hosty-full-backup-"):
+            parts = zip_path.name.split("-")
+            if len(parts) >= 6:
+                version = parts[3]
+                version_str = f" Version {version} ·"
+
+        sub = QLabel(f"{_format_size(st.st_size)} ·{version_str} {_format_mtime(st.st_mtime)}")
         sub.setProperty("class", "dim")
         text_col.addWidget(sub)
 
@@ -198,10 +205,16 @@ class BackupsPage(QWidget):
             self._status_lbl.setText("⚠ Stop the server before restoring a backup.")
             return
 
+        is_full = zip_path.name.startswith("hosty-full-backup-")
+        if is_full:
+            msg = f"Are you sure you want to restore '{zip_path.name}'?\n\nWARNING: This is a full backup. Restoring it will completely replace ALL server configuration, mods, and world files."
+        else:
+            msg = f"Are you sure you want to restore '{zip_path.name}'?\n\nThis will overwrite existing world files."
+
         reply = QMessageBox.question(
             self,
             "Restore Backup",
-            f"Are you sure you want to restore '{zip_path.name}'?\n\nThis will overwrite existing world files.",
+            msg,
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if reply != QMessageBox.StandardButton.Yes:
@@ -230,15 +243,9 @@ class BackupsPage(QWidget):
         threading.Thread(target=worker, daemon=True).start()
 
     def _delete_backup(self, zip_path: Path) -> None:
-        reply = QMessageBox.question(
-            self,
-            "Delete Backup",
-            f"Are you sure you want to permanently delete '{zip_path.name}'?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-        )
-        if reply == QMessageBox.StandardButton.Yes:
-            try:
-                zip_path.unlink(missing_ok=True)
-            except Exception as e:
-                QMessageBox.warning(self, "Delete Failed", f"Could not delete backup: {e}")
-            self._refresh()
+        try:
+            zip_path.unlink(missing_ok=True)
+            self._status_lbl.setText(f"✓ Backup '{zip_path.name}' deleted.")
+        except Exception as e:
+            QMessageBox.warning(self, "Delete Failed", f"Could not delete backup: {e}")
+        self._refresh()

@@ -131,7 +131,17 @@ class BackupsMixin:
     def _make_backup_row(self, zp: Path) -> Adw.ActionRow:
         st = zp.stat()
         row = Adw.ActionRow(title=zp.name)
-        row.set_subtitle(f"{_format_size(st.st_size)} · {_format_mtime(st.st_mtime)}")
+        
+        # Check if it's a full backup and has a version in the filename
+        version_str = ""
+        if zp.name.startswith("hosty-full-backup-"):
+            parts = zp.name.split("-")
+            # e.g., hosty-full-backup-1.20.4-20260510-123000.zip
+            if len(parts) >= 6:
+                version = parts[3]
+                version_str = f" Version {version} ·"
+
+        row.set_subtitle(f"{_format_size(st.st_size)} ·{version_str} {_format_mtime(st.st_mtime)}")
         row.set_activatable(False)
 
         restore_btn = self._icon_button(
@@ -221,10 +231,15 @@ class BackupsMixin:
 
         dialog = Adw.AlertDialog()
         dialog.set_heading("Restore backup?")
-        dialog.set_body(
-            f"Restore “{zp.name}”?\n\n"
-            "This replaces only world folders contained in the backup."
-        )
+        
+        is_full = zp.name.startswith("hosty-full-backup-")
+        body_text = f"Restore “{zp.name}”?\n\n"
+        if is_full:
+            body_text += "WARNING: This is a full backup. Restoring it will completely replace ALL server configuration, mods, and world files."
+        else:
+            body_text += "This replaces only world folders contained in the backup."
+        
+        dialog.set_body(body_text)
         dialog.add_response("cancel", "Cancel")
         dialog.add_response("restore", "Restore")
         dialog.set_response_appearance("restore", Adw.ResponseAppearance.DESTRUCTIVE)
@@ -258,42 +273,62 @@ class BackupsMixin:
                     with zipfile.ZipFile(zp, "r") as zf:
                         for info in zf.infolist():
                             candidate = (tmp_root / info.filename).resolve()
-                            if not _is_relative_to(candidate, tmp_root):
+                            if hasattr(candidate, "is_relative_to") and not candidate.is_relative_to(tmp_root):
+                                raise RuntimeError("Backup archive contains invalid paths.")
+                            elif not str(candidate).startswith(str(tmp_root)):
                                 raise RuntimeError("Backup archive contains invalid paths.")
                         zf.extractall(tmp_root)
 
-                    extracted_worlds = _world_dirs(tmp_root)
-                    if not extracted_worlds:
-                        raise RuntimeError("This backup does not contain any world data.")
+                    is_full = zp.name.startswith("hosty-full-backup-")
+                    if is_full:
+                        # Nuke everything in root except hosty-backups, then copy all
+                        for item in root.iterdir():
+                            if item.name == "hosty-backups":
+                                continue
+                            if item.is_dir():
+                                shutil.rmtree(item, ignore_errors=True)
+                            else:
+                                item.unlink(missing_ok=True)
+                        
+                        for item in tmp_root.iterdir():
+                            dst = root / item.name
+                            if item.is_dir():
+                                shutil.copytree(item, dst, dirs_exist_ok=True)
+                            else:
+                                shutil.copy2(item, dst)
+                    else:
+                        extracted_worlds = _world_dirs(tmp_root)
+                        if not extracted_worlds:
+                            raise RuntimeError("This backup does not contain any world data.")
 
-                    level_name = "world"
-                    for item in root.iterdir():
-                        if not item.is_dir():
-                            continue
-                        if (item / "level.dat").exists() or item.name.casefold() == level_name.casefold() or any(
-                            (item / marker).exists()
-                            for marker in (
-                                "region",
-                                "data",
-                                "playerdata",
-                                "poi",
-                                "entities",
-                                "stats",
-                                "advancements",
-                                "dimensions",
-                                "DIM-1",
-                                "DIM1",
-                                "session.lock",
-                                "uid.dat",
-                            )
-                        ):
-                            shutil.rmtree(item, ignore_errors=True)
+                        level_name = "world"
+                        for item in root.iterdir():
+                            if not item.is_dir():
+                                continue
+                            if (item / "level.dat").exists() or item.name.casefold() == level_name.casefold() or any(
+                                (item / marker).exists()
+                                for marker in (
+                                    "region",
+                                    "data",
+                                    "playerdata",
+                                    "poi",
+                                    "entities",
+                                    "stats",
+                                    "advancements",
+                                    "dimensions",
+                                    "DIM-1",
+                                    "DIM1",
+                                    "session.lock",
+                                    "uid.dat",
+                                )
+                            ):
+                                shutil.rmtree(item, ignore_errors=True)
 
-                    for item in extracted_worlds:
-                        dst = root / "world"
-                        if dst.is_dir():
-                            shutil.rmtree(dst, ignore_errors=True)
-                        shutil.copytree(item, dst, dirs_exist_ok=True)
+                        for item in extracted_worlds:
+                            dst = root / "world"
+                            if dst.is_dir():
+                                shutil.rmtree(dst, ignore_errors=True)
+                            shutil.copytree(item, dst, dirs_exist_ok=True)
 
                 def ui_ok():
                     self._backup_busy = False
@@ -314,25 +349,11 @@ class BackupsMixin:
         threading.Thread(target=worker, daemon=True).start()
 
     def _confirm_delete_backup(self, zp: Path) -> None:
-        dialog = Adw.AlertDialog()
-        dialog.set_heading("Delete backup?")
-        dialog.set_body(f"Remove “{zp.name}”?")
-        dialog.add_response("cancel", "Cancel")
-        dialog.add_response("delete", "Delete")
-        dialog.set_response_appearance("delete", Adw.ResponseAppearance.DESTRUCTIVE)
-        dialog.set_default_response("cancel")
-        dialog.set_close_response("cancel")
-
-        def on_response(_d, response):
-            if response == "delete":
-                self._soft_delete_with_undo(
-                    zp,
-                    f"backup \"{zp.name}\"",
-                    on_refresh=self._refresh_backup_list,
-                )
-
-        dialog.connect("response", on_response)
-        dialog.present(self.get_root())
+        self._soft_delete_with_undo(
+            zp,
+            f"backup \"{zp.name}\"",
+            on_refresh=self._refresh_backup_list,
+        )
 
     def _on_open_backups_folder(self, *_):
         bdir = self._backups_dir()

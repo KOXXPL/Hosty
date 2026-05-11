@@ -65,6 +65,21 @@ class PropertiesView(Gtk.Box):
         )
         general.add(self._autostart_row)
 
+        self._version_row = Adw.ActionRow(
+            title="Minecraft Version",
+            subtitle="Unknown"
+        )
+        
+        self._change_version_btn = Gtk.Button(
+            label="Change...",
+            valign=Gtk.Align.CENTER
+        )
+        self._change_version_btn.add_css_class("pill")
+        # Ensure we connect a stub handler until fully wired up
+        self._change_version_btn.connect("clicked", self._on_change_version_clicked)
+        self._version_row.add_suffix(self._change_version_btn)
+        general.add(self._version_row)
+
         self._widgets["motd"] = self._add_entry_row(
             general, "Message of the Day", "motd", "a hosty server"
         )
@@ -279,9 +294,21 @@ class PropertiesView(Gtk.Box):
         self._config = config
         self._server_manager = server_manager
         self._server_info = server_info
+        
+        if self._server_info and hasattr(self, '_version_row'):
+            version_text = self._server_info.mc_version or "Unknown"
+            if self._server_info.loader_version:
+                version_text += f" ({self._server_info.loader_version})"
+            self._version_row.set_subtitle(version_text)
+
         if config:
             config.load()
             self._populate()
+
+    def _on_change_version_clicked(self, button):
+        """Placeholder for change version dialog."""
+        self._show_toast("Version changing dialog not yet fully implemented in this view.", timeout=3)
+
 
     def reload_from_disk(self):
         """Reload properties from server.properties on disk."""

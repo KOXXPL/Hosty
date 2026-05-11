@@ -187,6 +187,33 @@ class ServerManager(EventEmitter):
                 proc.ram_mb = ram_mb
             self.emit_on_main_thread('server-changed', server_id)
 
+    def update_server_version(self, server_id: str, mc_version: str) -> tuple[bool, str]:
+        """Update the Minecraft version for a server."""
+        from hosty.shared.utils.constants import get_required_java_version
+        
+        info = self._servers.get(server_id)
+        if not info:
+            return False, "Server not found"
+            
+        process = self._processes.get(server_id)
+        if process and process.is_running:
+            return False, "Cannot update version while server is running"
+            
+        try:
+            java_req = get_required_java_version(mc_version)
+        except Exception:
+            java_req = 21 # Default fallback
+            
+        info.mc_version = mc_version
+        info.java_version = java_req
+        
+        # Reset the server jar/executable path so it triggers a fresh download on next start
+        info.executable_path = ""
+        
+        self._save()
+        self.emit_on_main_thread('server-changed', server_id)
+        return True, ""
+
     def restore_server(self, server_data: dict) -> bool:
         """Restore a previously deleted server metadata entry."""
         try:
@@ -569,3 +596,122 @@ class ServerManager(EventEmitter):
             return False, str(e)
 
         return True, backup_path.name
+
+    def create_full_backup(self, server_id: str) -> tuple[bool, str]:
+        """Create a zip backup containing everything in the server directory, specifically tailored for version updates."""
+        info = self.get_server(server_id)
+        if not info:
+            return False, "Server not found"
+
+        process = self._processes.get(server_id)
+        if process and process.is_running:
+            return False, "Server is running"
+
+        root = info.server_dir
+        if not root.exists():
+            return False, "Server directory does not exist"
+
+        backups_dir = root / "hosty-backups"
+        backups_dir.mkdir(parents=True, exist_ok=True)
+
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        
+        # Tag the backup with the current server version
+        version = info.mc_version if info.mc_version else "unknown"
+        backup_path = backups_dir / f"hosty-full-backup-{version}-{stamp}.zip"
+
+        try:
+            with zipfile.ZipFile(backup_path, "w", zipfile.ZIP_DEFLATED) as zf:
+                for item in root.rglob("*"):
+                    if not item.is_file():
+                        continue
+                    # Skip the backups folder itself
+                    if hasattr(item, "is_relative_to") and item.is_relative_to(backups_dir):
+                        continue
+                    elif str(item).startswith(str(backups_dir)): # fallback
+                        continue
+                        
+                    arc = item.relative_to(root)
+                    zf.write(item, arcname=str(arc).replace("\\", "/"))
+        except Exception as e:
+            return False, str(e)
+
+        return True, backup_path.name
+
+    def restore_world_backup(self, server_id: str, zip_path: Path) -> tuple[bool, str]:
+        """Restore a zip backup. If it's a full backup, it overwrites everything except backups. Otherwise, it just replaces worlds."""
+        import tempfile
+        import shutil
+
+        info = self.get_server(server_id)
+        if not info:
+            return False, "Server not found"
+
+        process = self._processes.get(server_id)
+        if process and process.is_running:
+            return False, "Server is running"
+
+        root = info.server_dir
+        if not root.exists():
+            return False, "Server directory does not exist"
+
+        if not zip_path.exists():
+            return False, "Backup file not found"
+
+        is_full = zip_path.name.startswith("hosty-full-backup-")
+
+        try:
+            with tempfile.TemporaryDirectory(prefix="hosty-restore-") as td:
+                tmp_root = Path(td).resolve()
+                with zipfile.ZipFile(zip_path, "r") as zf:
+                    for zi in zf.infolist():
+                        candidate = (tmp_root / zi.filename).resolve()
+                        if hasattr(candidate, "is_relative_to") and not candidate.is_relative_to(tmp_root):
+                            return False, "Backup archive contains invalid paths."
+                        elif not str(candidate).startswith(str(tmp_root)):
+                            return False, "Backup archive contains invalid paths."
+                    zf.extractall(tmp_root)
+
+                if is_full:
+                    # Nuke everything in root except hosty-backups, then copy all
+                    for item in root.iterdir():
+                        if item.name == "hosty-backups":
+                            continue
+                        if item.is_dir():
+                            shutil.rmtree(item, ignore_errors=True)
+                        else:
+                            item.unlink(missing_ok=True)
+                    
+                    for item in tmp_root.iterdir():
+                        dst = root / item.name
+                        if item.is_dir():
+                            shutil.copytree(item, dst, dirs_exist_ok=True)
+                        else:
+                            shutil.copy2(item, dst)
+                else:
+                    # Just restore worlds
+                    extracted_worlds = self._iter_world_dirs(tmp_root)
+                    if not extracted_worlds:
+                        return False, "This backup does not contain any world data."
+
+                    level_name = "world"
+                    for item in root.iterdir():
+                        if not item.is_dir():
+                            continue
+                        if (item / "level.dat").exists() or item.name.casefold() == level_name.casefold() or any(
+                            (item / marker).exists()
+                            for marker in (
+                                "region", "data", "playerdata", "poi", "entities", "stats", "advancements", "dimensions", "DIM-1", "DIM1", "session.lock", "uid.dat",
+                            )
+                        ):
+                            shutil.rmtree(item, ignore_errors=True)
+
+                    for item in extracted_worlds:
+                        dst = root / "world"
+                        if dst.is_dir():
+                            shutil.rmtree(dst, ignore_errors=True)
+                        shutil.copytree(item, dst, dirs_exist_ok=True)
+
+            return True, "Restored."
+        except Exception as e:
+            return False, str(e)

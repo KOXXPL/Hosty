@@ -89,6 +89,28 @@ class PropertiesMixin:
         gen_lay = QVBoxLayout(general)
         gen_lay.setSpacing(10)
 
+        # Version Row
+        version_row = QWidget()
+        version_lay = QHBoxLayout(version_row)
+        version_lay.setContentsMargins(0, 0, 0, 0)
+        
+        self._version_label = QLabel("Minecraft Version:")
+        version_lay.addWidget(self._version_label)
+        
+        self._version_val = QLabel("Unknown")
+        self._version_val.setProperty("class", "dim")
+        version_lay.addWidget(self._version_val)
+        
+        version_lay.addStretch()
+        
+        self._change_version_btn = QPushButton("Change...")
+        self._change_version_btn.setProperty("class", "flat")
+        self._change_version_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._change_version_btn.clicked.connect(self._on_change_version_clicked)
+        version_lay.addWidget(self._change_version_btn)
+        
+        gen_lay.addWidget(version_row)
+
         self._prop_widgets["motd"] = self._add_prop_entry(gen_lay, "Message of the Day", "motd", "a hosty server")
         self._prop_widgets["max-players"] = self._add_prop_spin(gen_lay, "Max Players", "max-players", 1, 1000, 20)
         self._prop_widgets["difficulty"] = self._add_prop_combo(gen_lay, "Difficulty", "difficulty", DIFFICULTIES, "easy")
@@ -220,9 +242,20 @@ class PropertiesMixin:
 
         self._prop_config = config
         self._prop_server_info = info
+        
+        if hasattr(self, '_version_val'):
+            v_text = info.mc_version or "Unknown"
+            if info.loader_version:
+                v_text += f" ({info.loader_version})"
+            self._version_val.setText(v_text)
+            
         config.load()
         self._populate_properties()
         self._props_banner.setVisible(False)
+
+    def _on_change_version_clicked(self) -> None:
+        """Placeholder for version change flow."""
+        self._show_toast("Version change dialog not fully implemented here yet.")
 
     def _populate_properties(self) -> None:
         if not self._prop_config:
