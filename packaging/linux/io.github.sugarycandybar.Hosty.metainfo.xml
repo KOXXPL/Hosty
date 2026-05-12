@@ -45,6 +45,11 @@
   <url type="bugtracker">https://github.com/sugarycandybar/Hosty/issues</url>
   <url type="vcs-browser">https://github.com/sugarycandybar/Hosty</url>
   <releases>
+    <release version="1.7.0" date="2026-05-11">
+      <description>
+        <p>Added support for updating server version; improved bedrock support.</p>
+      </description>
+    </release>
     <release version="1.6.4" date="2026-05-10">
       <description>
         <p>Fix datapack update bug</p>

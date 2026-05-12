@@ -6,7 +6,7 @@ project('hosty',
 python = import('python').find_installation('python3')
 
 subdir('bin')
-subdir('data')
+subdir('packaging/linux')
 
 # Install the hosty package directory to share/ (as /app/share/hosty)
 install_subdir('hosty',
