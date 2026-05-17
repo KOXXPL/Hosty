@@ -221,6 +221,56 @@ class ServerStatus:
     STOPPING = "stopping"
 
 # Default RAM allocation in MB
-DEFAULT_RAM_MB = 2048
 MIN_RAM_MB = 512
-MAX_RAM_MB = 16384
+
+def get_system_ram_mb() -> int:
+    """Return the total system RAM in Megabytes."""
+    try:
+        import psutil
+        return int(psutil.virtual_memory().total / (1024 * 1024))
+    except Exception:
+        if sys.platform == "win32":
+            try:
+                import ctypes
+                class MEMORYSTATUSEX(ctypes.Structure):
+                    _fields_ = [
+                        ("dwLength", ctypes.c_ulong),
+                        ("dwMemoryLoad", ctypes.c_ulong),
+                        ("ullTotalPhys", ctypes.c_ulonglong),
+                        ("ullAvailPhys", ctypes.c_ulonglong),
+                        ("ullTotalPageFile", ctypes.c_ulonglong),
+                        ("ullAvailPageFile", ctypes.c_ulonglong),
+                        ("ullTotalVirtual", ctypes.c_ulonglong),
+                        ("ullAvailVirtual", ctypes.c_ulonglong),
+                        ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+                    ]
+                stat = MEMORYSTATUSEX()
+                stat.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
+                ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat))
+                return int(stat.ullTotalPhys / (1024 * 1024))
+            except Exception:
+                pass
+        else:
+            try:
+                return int(os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_PHYS_PAGES') / (1024 * 1024))
+            except Exception:
+                pass
+    return 16384  # Default fallback if all fails (16GB)
+
+def _get_max_ram_mb() -> int:
+    sys_ram = get_system_ram_mb()
+    # Determine OS headroom to leave system responsive:
+    # <= 4GB system: leave 1GB
+    # <= 8GB system: leave 1.5GB
+    # > 8GB system: leave 2GB
+    if sys_ram <= 4096:
+        headroom = 1024
+    elif sys_ram <= 8192:
+        headroom = 1536
+    else:
+        headroom = 2048
+    return max(MIN_RAM_MB, sys_ram - headroom)
+
+MAX_RAM_MB = _get_max_ram_mb()
+DEFAULT_RAM_MB = min(2048, MAX_RAM_MB)
+

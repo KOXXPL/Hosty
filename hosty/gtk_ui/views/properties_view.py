@@ -119,7 +119,6 @@ class PropertiesView(Gtk.Box):
         )
         self._ram_row.set_tooltip_text(
             f"Megabytes for the Java heap. Range {MIN_RAM_MB}–{MAX_RAM_MB}. "
-            "Restart the server for a change to apply."
         )
         resources.add(self._ram_row)
         page.add(resources)
