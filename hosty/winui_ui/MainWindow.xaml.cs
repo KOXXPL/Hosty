@@ -13,13 +13,13 @@ namespace winui_ui;
 
 public sealed partial class MainWindow : Window
 {
-    public PythonBackendClient IpcClient { get; private set; }
+    public PythonBackendClient IpcClient { get; private set; } = null!;
     private List<ServerModel> _servers = new();
 
     // Store references to the dynamic menu items so we can remove/update them
     private readonly List<NavigationViewItem> _serverMenuItems = new();
-    private NavigationViewItemHeader _serversHeader;
-    private NavigationViewItem _createServerItem;
+    private NavigationViewItemHeader? _serversHeader;
+    private NavigationViewItem? _createServerItem;
 
     public MainWindow()
     {
@@ -39,9 +39,9 @@ public sealed partial class MainWindow : Window
     {
         IpcClient = new PythonBackendClient();
         IpcClient.BackendReady += IpcClient_BackendReady;
-        IpcClient.ServerAdded += (s, data) => Dispatch(() => RefreshServers());
-        IpcClient.ServerRemoved += (s, data) => Dispatch(() => RefreshServers());
-        IpcClient.ServerChanged += (s, data) => Dispatch(() => RefreshServers());
+        IpcClient.ServerAdded += (s, data) => Dispatch(async () => await RefreshServers());
+        IpcClient.ServerRemoved += (s, data) => Dispatch(async () => await RefreshServers());
+        IpcClient.ServerChanged += (s, data) => Dispatch(async () => await RefreshServers());
 
         // Resolve paths relative to the build output directory
         string baseDir = AppContext.BaseDirectory;
@@ -97,7 +97,7 @@ public sealed partial class MainWindow : Window
         DispatcherQueue.TryEnqueue(() => action());
     }
 
-    private async void IpcClient_BackendReady(object sender, EventArgs e)
+    private void IpcClient_BackendReady(object? sender, EventArgs e)
     {
         Dispatch(async () => {
             await RefreshServers();
@@ -113,7 +113,7 @@ public sealed partial class MainWindow : Window
         try
         {
             var result = await IpcClient.SendRequestAsync("get_servers");
-            _servers = JsonSerializer.Deserialize<List<ServerModel>>(result.GetRawText());
+            _servers = JsonSerializer.Deserialize<List<ServerModel>>(result.GetRawText()) ?? new();
             
             BuildServerMenu();
         }
@@ -148,10 +148,40 @@ public sealed partial class MainWindow : Window
         // 3. Add Server items
         foreach (var server in _servers)
         {
+            Microsoft.UI.Xaml.Controls.IconElement iconElement;
+            if (!string.IsNullOrEmpty(server.IconPath) && System.IO.File.Exists(server.IconPath))
+            {
+                try
+                {
+                    iconElement = new Microsoft.UI.Xaml.Controls.ImageIcon
+                    {
+                        Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(server.IconPath))
+                    };
+                }
+                catch
+                {
+                    iconElement = new Microsoft.UI.Xaml.Controls.SymbolIcon(Microsoft.UI.Xaml.Controls.Symbol.Contact);
+                }
+            }
+            else
+            {
+                try
+                {
+                    iconElement = new Microsoft.UI.Xaml.Controls.ImageIcon
+                    {
+                        Source = new Microsoft.UI.Xaml.Media.Imaging.SvgImageSource(new Uri("ms-appx:///Assets/AppIcon.svg"))
+                    };
+                }
+                catch
+                {
+                    iconElement = new Microsoft.UI.Xaml.Controls.SymbolIcon(Microsoft.UI.Xaml.Controls.Symbol.Contact);
+                }
+            }
+
             var item = new NavigationViewItem
             {
                 Content = server.Name,
-                Icon = new SymbolIcon(Symbol.Contact), // Placeholder, can be updated to load custom images
+                Icon = iconElement,
                 Tag = $"server_{server.Id}"
             };
             NavView.MenuItems.Add(item);
@@ -183,7 +213,7 @@ public sealed partial class MainWindow : Window
 
         if (args.SelectedItem is NavigationViewItem item)
         {
-            string tag = item.Tag?.ToString();
+            string? tag = item.Tag?.ToString();
             if (string.IsNullOrEmpty(tag)) return;
 
             if (tag == "home")

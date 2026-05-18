@@ -38,7 +38,10 @@ namespace winui_ui.Dialogs
                     {
                         foreach (var ver in gameVersionsProp.EnumerateArray())
                         {
-                            _gameVersions.Add(ver.GetString());
+                            if (ver.GetString() is string val)
+                            {
+                                _gameVersions.Add(val);
+                            }
                         }
                     }
 
@@ -46,7 +49,10 @@ namespace winui_ui.Dialogs
                     {
                         foreach (var ver in loaderVersionsProp.EnumerateArray())
                         {
-                            _loaderVersions.Add(ver.GetString());
+                            if (ver.GetString() is string val)
+                            {
+                                _loaderVersions.Add(val);
+                            }
                         }
                     }
 
@@ -178,7 +184,7 @@ namespace winui_ui.Dialogs
             }
         }
 
-        private void OnInstallProgress(object sender, JsonElement data)
+        private void OnInstallProgress(object? sender, JsonElement data)
         {
             DispatcherQueue.TryEnqueue(() =>
             {
@@ -190,7 +196,7 @@ namespace winui_ui.Dialogs
             });
         }
 
-        private void OnInstallComplete(object sender, JsonElement data)
+        private void OnInstallComplete(object? sender, JsonElement data)
         {
             DispatcherQueue.TryEnqueue(() =>
             {
@@ -203,7 +209,7 @@ namespace winui_ui.Dialogs
             });
         }
 
-        private void OnInstallError(object sender, JsonElement data)
+        private void OnInstallError(object? sender, JsonElement data)
         {
             DispatcherQueue.TryEnqueue(() =>
             {

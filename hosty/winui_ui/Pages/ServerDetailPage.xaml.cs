@@ -10,8 +10,8 @@ namespace winui_ui.Pages
 {
     public sealed partial class ServerDetailPage : Page
     {
-        private ServerModel _server;
-        private PythonBackendClient _ipcClient;
+        private ServerModel? _server;
+        private PythonBackendClient? _ipcClient;
         private DispatcherTimer _pollTimer;
         private bool _isLoadingDetails = false;
 
@@ -74,7 +74,14 @@ namespace winui_ui.Pages
                 {
                     ServerIcon.Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(new Uri(_server.IconPath));
                 }
-                catch {}
+                catch
+                {
+                    ServerIcon.Source = new Microsoft.UI.Xaml.Media.Imaging.SvgImageSource(new Uri("ms-appx:///Assets/AppIcon.svg"));
+                }
+            }
+            else
+            {
+                ServerIcon.Source = new Microsoft.UI.Xaml.Media.Imaging.SvgImageSource(new Uri("ms-appx:///Assets/AppIcon.svg"));
             }
 
             _isLoadingDetails = false;
@@ -184,7 +191,7 @@ namespace winui_ui.Pages
             ConsoleScroll.ChangeView(null, ConsoleScroll.ScrollableHeight, null);
         }
 
-        private async void PollTimer_Tick(object sender, object e)
+        private async void PollTimer_Tick(object? sender, object? e)
         {
             if (_server == null || _ipcClient == null) return;
 
