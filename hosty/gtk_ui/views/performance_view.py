@@ -1,11 +1,11 @@
 """
 PerformanceView - Server performance monitoring (CPU, RAM, TPS).
 """
-import math
 import gi
 gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
 from gi.repository import Gtk, Adw, GLib, Gdk
+from PIL import Image, ImageDraw
 
 try:
     import psutil
@@ -16,71 +16,58 @@ except ImportError:
 from hosty.shared.backend.server_process import ServerProcess
 
 
-class SparklineWidget(Gtk.DrawingArea):
-    """A small sparkline chart widget drawn with Cairo."""
+class SparklineWidget(Gtk.Picture):
+    """A small sparkline chart widget rendered as a texture."""
     
     def __init__(self, color_rgb=(0.22, 0.53, 0.91), max_points=60):
         super().__init__()
         self._data = [0.0] * max_points
         self._max_points = max_points
         self._color = color_rgb
-        # Keep sparkline background transparent and draw custom tint in Cairo.
         self.add_css_class("sparkline")
-        self.set_draw_func(self._draw)
+        self.set_content_fit(Gtk.ContentFit.FILL)
+        self._render()
     
     def add_value(self, value):
         self._data.pop(0)
         self._data.append(value)
-        self.queue_draw()
+        self._render()
     
     def clear(self):
         self._data = [0.0] * self._max_points
-        self.queue_draw()
+        self._render()
         
-    def _draw(self, area, cr, width, height):
+    def _rgba(self, alpha: int) -> tuple[int, int, int, int]:
         r, g, b = self._color
-        
-        # Clip top corners to match Adwaita card styling
-        radius = 12
-        cr.new_path()
-        cr.move_to(0, radius)
-        cr.arc(radius, radius, radius, math.pi, 1.5 * math.pi)
-        cr.line_to(width - radius, 0)
-        cr.arc(width - radius, radius, radius, 1.5 * math.pi, 2 * math.pi)
-        cr.line_to(width, height)
-        cr.line_to(0, height)
-        cr.close_path()
-        cr.clip()
-        
-        # Tinted background matching the metric's specific color
-        cr.set_source_rgba(r, g, b, 0.08)
-        cr.rectangle(0, 0, width, height)
-        cr.fill()
-        
-        # Filled area under the line
-        cr.set_source_rgba(r, g, b, 0.25)
-        cr.move_to(0, height)
-        
-        for i, val in enumerate(self._data):
-            x = (i / (self._max_points - 1)) * width
-            y = height - 1.5 - (val / 100.0) * (height * 0.95 - 2)
-            cr.line_to(x, y)
-            
-        cr.line_to(width, height)
-        cr.close_path()
-        cr.fill()
-        
-        # The line stroke (always visible even at 0)
-        cr.set_source_rgba(r, g, b, 1.0)
-        cr.set_line_width(2)
-        cr.move_to(0, height - 1.5 - (self._data[0] / 100.0) * (height * 0.95 - 2))
-        
-        for i, val in enumerate(self._data):
-            x = (i / (self._max_points - 1)) * width
-            y = height - 1.5 - (val / 100.0) * (height * 0.95 - 2)
-            cr.line_to(x, y)
-            
-        cr.stroke()
+        return (int(r * 255), int(g * 255), int(b * 255), alpha)
+
+    def _render(self):
+        width = 720
+        height = 120
+        image = Image.new("RGBA", (width, height), self._rgba(20))
+        draw = ImageDraw.Draw(image, "RGBA")
+
+        points = []
+        denom = max(1, self._max_points - 1)
+        for i, value in enumerate(self._data):
+            x = int((i / denom) * (width - 1))
+            y = int(height - 3 - (max(0.0, min(100.0, value)) / 100.0) * (height - 8))
+            points.append((x, y))
+
+        if points:
+            fill_points = [(0, height)] + points + [(width, height)]
+            draw.polygon(fill_points, fill=self._rgba(58))
+            draw.line(points, fill=self._rgba(255), width=3, joint="curve")
+
+        data = GLib.Bytes.new(image.tobytes("raw", "RGBA"))
+        texture = Gdk.MemoryTexture.new(
+            width,
+            height,
+            Gdk.MemoryFormat.R8G8B8A8,
+            data,
+            width * 4,
+        )
+        self.set_paintable(texture)
 
 
 class MetricCard(Gtk.Box):

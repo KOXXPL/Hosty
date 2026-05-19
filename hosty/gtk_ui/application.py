@@ -3,6 +3,7 @@ HostyApplication - Main Adw.Application subclass.
 Handles app lifecycle, actions, CSS loading, and dialog management.
 """
 import shutil
+import sys
 
 import gi
 gi.require_version('Gtk', '4.0')
@@ -114,17 +115,24 @@ class HostyApplication(Adw.Application):
             )
 
     def _register_packaged_icons(self):
-        """Ensure packaged app icons are discoverable in development runs."""
+        """Ensure app icons are discoverable in development and frozen runs."""
         display = Gdk.Display.get_default()
         if not display:
             return
 
-        icon_dir = Path(__file__).resolve().parents[2] / "packaging" / "linux"
-        if not icon_dir.exists():
-            return
-
         icon_theme = Gtk.IconTheme.get_for_display(display)
-        icon_theme.add_search_path(str(icon_dir))
+
+        candidates = []
+        if getattr(sys, "frozen", False):
+            bundle_dir = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
+            candidates.append(bundle_dir / "share" / "icons")
+            candidates.append(bundle_dir / "icons")
+
+        candidates.append(Path(__file__).resolve().parents[2] / "packaging" / "linux")
+
+        for icon_dir in candidates:
+            if icon_dir.exists():
+                icon_theme.add_search_path(str(icon_dir))
     
     def _setup_actions(self):
         """Register application actions."""

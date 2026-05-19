@@ -36,7 +36,7 @@ class ServerRow(Adw.ActionRow):
         self.add_prefix(self._avatar)
         
         # Status dot
-        self._status_dot = Gtk.Box()
+        self._status_dot = Gtk.Label(label="●")
         self._status_dot.set_size_request(10, 10)
         self._status_dot.add_css_class("status-dot")
         self._status_dot.add_css_class("stopped")

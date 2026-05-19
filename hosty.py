@@ -42,6 +42,14 @@ def _configure_frozen_gtk_environment() -> None:
     if schemas_dir.exists():
         os.environ.setdefault("GSETTINGS_SCHEMA_DIR", str(schemas_dir))
 
+    pixbuf_root = bundle_dir / "lib" / "gdk-pixbuf-2.0"
+    loaders_dir = pixbuf_root / "2.10.0" / "loaders"
+    loaders_cache = pixbuf_root / "2.10.0" / "loaders.cache"
+    if loaders_dir.exists():
+        os.environ.setdefault("GDK_PIXBUF_MODULEDIR", str(loaders_dir))
+    if loaders_cache.exists():
+        os.environ.setdefault("GDK_PIXBUF_MODULE_FILE", str(loaders_cache))
+
 
 def _format_missing_gtk_message() -> str:
     if sys.platform == "win32":
