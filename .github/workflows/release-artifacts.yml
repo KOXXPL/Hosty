@@ -82,6 +82,10 @@ jobs:
       - name: Build portable GTK app
         shell: msys2 {0}
         run: |
+          GI_TYPELIBS="$(cygpath -w /ucrt64/lib/girepository-1.0)"
+          GLIB_SCHEMAS="$(cygpath -w /ucrt64/share/glib-2.0/schemas)"
+          ICONS="$(cygpath -w /ucrt64/share/icons)"
+
           pyinstaller \
             --noconfirm \
             --clean \
@@ -90,11 +94,9 @@ jobs:
             --name Hosty \
             --collect-submodules gi \
             --collect-submodules hosty \
-            --add-binary "/ucrt64/bin/libgtk-4-1.dll;." \
-            --add-binary "/ucrt64/bin/libadwaita-1-0.dll;." \
-            --add-data "/ucrt64/lib/girepository-1.0;lib/girepository-1.0" \
-            --add-data "/ucrt64/share/glib-2.0/schemas;share/glib-2.0/schemas" \
-            --add-data "/ucrt64/share/icons;share/icons" \
+            --add-data "$GI_TYPELIBS;lib/girepository-1.0" \
+            --add-data "$GLIB_SCHEMAS;share/glib-2.0/schemas" \
+            --add-data "$ICONS;share/icons" \
             hosty.py
 
       - name: Zip portable app
