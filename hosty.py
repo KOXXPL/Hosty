@@ -66,6 +66,10 @@ def _configure_frozen_gtk_environment() -> None:
         os.environ.setdefault("GDK_PIXBUF_MODULE_FILE", str(loaders_cache))
 
 
+# Store global reference to prevent garbage collection
+_windows_mutex = None
+
+
 def _configure_windows_app_identity() -> None:
     if sys.platform != "win32":
         return
@@ -76,6 +80,13 @@ def _configure_windows_app_identity() -> None:
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
             "io.github.sugarycandybar.Hosty"
         )
+
+        global _windows_mutex
+        _windows_mutex = ctypes.windll.kernel32.CreateMutexW(None, False, "io.github.sugarycandybar.Hosty")
+        ERROR_ALREADY_EXISTS = 183
+        if ctypes.windll.kernel32.GetLastError() == ERROR_ALREADY_EXISTS:
+            # Enforce single-instance on Windows
+            sys.exit(0)
     except Exception:
         pass
 

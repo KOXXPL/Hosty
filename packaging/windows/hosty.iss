@@ -1,10 +1,21 @@
 #define AppName "Hosty"
-#ifndef AppVersion
-  #define AppVersion "1.0.0"
-#endif
-#define AppPublisher "Sugarycandybar"
+#define AppPublisher "SugaryCandyBar"
 #define AppURL "https://github.com/sugarycandybar/Hosty"
 #define AppExeName "Hosty.exe"
+
+#ifndef AppVersion
+  #define FileHandle FileOpen("..\..\hosty\version.py")
+  #if FileHandle
+    #define FileLine FileRead(FileHandle)
+    #expr FileClose(FileHandle)
+    #define Quote1Pos Pos('"', FileLine)
+    #define TempStr Copy(FileLine, Quote1Pos + 1, Len(FileLine) - Quote1Pos)
+    #define Quote2Pos Pos('"', TempStr)
+    #define AppVersion Copy(TempStr, 1, Quote2Pos - 1)
+  #else
+    #define AppVersion "1.0.0"
+  #endif
+#endif
 
 [Setup]
 AppId={{E1CA2F67-27C8-4DE3-A1F0-FA8B2EB4B127}}
@@ -14,6 +25,7 @@ AppPublisher={#AppPublisher}
 AppPublisherURL={#AppURL}
 AppSupportURL={#AppURL}/issues
 AppUpdatesURL={#AppURL}/releases
+AppMutex=io.github.sugarycandybar.Hosty
 DefaultDirName={autopf}\{#AppName}
 ArchitecturesAllowed=x64
 ArchitecturesInstallIn64BitMode=x64
@@ -26,6 +38,7 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 DisableWelcomePage=no
+CloseApplications=yes
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

@@ -186,29 +186,19 @@ jobs:
     if: github.event_name == 'release'
 
     steps:
-      - name: Download all artifacts
+      - name: Download installer artifact
         uses: actions/download-artifact@v4
         with:
+          name: hosty-windows-installer-${{ needs.build-windows-exe.outputs.version }}
           path: release-assets
 
-      - name: Package release assets
+      - name: Prepare release assets
         run: |
           VERSION="${{ needs.build-windows-exe.outputs.version }}"
-          echo "Packaging assets for version $VERSION"
-          
-          # Create the single zip containing the Hosty folder
-          mkdir -p workspace/Hosty
-          cp -r release-assets/hosty-windows-portable-$VERSION/* workspace/Hosty/
-          cd workspace
-          zip -r "../Hosty-$VERSION-windows-x86_64.zip" Hosty
-          cd ..
-          
-          # Move the installer executable to current directory
-          mv release-assets/hosty-windows-installer-$VERSION/Hosty-$VERSION-Setup.exe .
+          mv release-assets/Hosty-$VERSION-Setup.exe .
 
       - name: Upload assets to release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            Hosty-*.zip
             Hosty-*-Setup.exe
