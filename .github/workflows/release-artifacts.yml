@@ -12,6 +12,8 @@ jobs:
   build-windows-exe:
     name: Build Windows GTK App
     runs-on: windows-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
 
     steps:
       - name: Checkout
@@ -127,33 +129,54 @@ jobs:
           BUNDLE_PIXBUF_LOADERS="$(cygpath -w "$BUNDLE_PIXBUF_DIR/loaders")"
           GDK_PIXBUF_MODULEDIR="$BUNDLE_PIXBUF_LOADERS" gdk-pixbuf-query-loaders > "$BUNDLE_PIXBUF_DIR/loaders.cache"
 
-      - name: Sign Windows app
+      - name: Sign Windows app and build installer
         shell: pwsh
         env:
           WINDOWS_CODESIGN_PFX_BASE64: ${{ secrets.WINDOWS_CODESIGN_PFX_BASE64 }}
           WINDOWS_CODESIGN_PASSWORD: ${{ secrets.WINDOWS_CODESIGN_PASSWORD }}
+          APP_VERSION: ${{ steps.version.outputs.version }}
         run: |
-          if (-not $env:WINDOWS_CODESIGN_PFX_BASE64 -or -not $env:WINDOWS_CODESIGN_PASSWORD) {
-            Write-Host "Code signing secrets are not configured; skipping EXE signing."
-            exit 0
+          $hasCert = $env:WINDOWS_CODESIGN_PFX_BASE64 -and $env:WINDOWS_CODESIGN_PASSWORD
+          if ($hasCert) {
+            $certPath = Join-Path $env:RUNNER_TEMP "hosty-codesign.pfx"
+            [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:WINDOWS_CODESIGN_PFX_BASE64))
+            
+            Write-Host "Signing Hosty.exe..."
+            signtool sign /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com /f $certPath /p $env:WINDOWS_CODESIGN_PASSWORD "dist/Hosty/Hosty.exe"
+            signtool verify /pa /v "dist/Hosty/Hosty.exe"
+          } else {
+            Write-Host "Code signing secrets are not configured; skipping Hosty.exe signing."
           }
-          $certPath = Join-Path $env:RUNNER_TEMP "hosty-codesign.pfx"
-          [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:WINDOWS_CODESIGN_PFX_BASE64))
-          signtool sign /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com /f $certPath /p $env:WINDOWS_CODESIGN_PASSWORD "dist/Hosty/Hosty.exe"
-          signtool verify /pa /v "dist/Hosty/Hosty.exe"
-          Remove-Item -LiteralPath $certPath -Force
 
-      - name: Zip portable app
-        shell: msys2 {0}
-        run: |
-          cd dist
-          zip -r "Hosty-${{ steps.version.outputs.version }}-windows-x86_64.zip" Hosty
+          Write-Host "Compiling Inno Setup installer..."
+          $iscc = Get-Command iscc -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source
+          if (-not $iscc) {
+            $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          }
+          Write-Host "Using ISCC compiler at: $iscc"
+          & $iscc /DAppVersion=$env:APP_VERSION packaging/windows/hosty.iss
 
-      - name: Upload Windows artifact
+          if ($hasCert) {
+            Write-Host "Signing installer..."
+            $installerPath = "dist/Hosty-$($env:APP_VERSION)-Setup.exe"
+            signtool sign /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com /f $certPath /p $env:WINDOWS_CODESIGN_PASSWORD $installerPath
+            signtool verify /pa /v $installerPath
+            Remove-Item -LiteralPath $certPath -Force
+          } else {
+            Write-Host "Code signing secrets are not configured; skipping installer signing."
+          }
+
+      - name: Upload Windows portable artifact
         uses: actions/upload-artifact@v4
         with:
-          name: hosty-windows-${{ steps.version.outputs.version }}
-          path: dist/Hosty-${{ steps.version.outputs.version }}-windows-x86_64.zip
+          name: hosty-windows-portable-${{ steps.version.outputs.version }}
+          path: dist/Hosty
+
+      - name: Upload Windows installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hosty-windows-installer-${{ steps.version.outputs.version }}
+          path: dist/Hosty-${{ steps.version.outputs.version }}-Setup.exe
 
 
   upload-release-assets:
@@ -167,10 +190,25 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: release-assets
-          merge-multiple: true
+
+      - name: Package release assets
+        run: |
+          VERSION="${{ needs.build-windows-exe.outputs.version }}"
+          echo "Packaging assets for version $VERSION"
+          
+          # Create the single zip containing the Hosty folder
+          mkdir -p workspace/Hosty
+          cp -r release-assets/hosty-windows-portable-$VERSION/* workspace/Hosty/
+          cd workspace
+          zip -r "../Hosty-$VERSION-windows-x86_64.zip" Hosty
+          cd ..
+          
+          # Move the installer executable to current directory
+          mv release-assets/hosty-windows-installer-$VERSION/Hosty-$VERSION-Setup.exe .
 
       - name: Upload assets to release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release-assets/**/*.zip
+            Hosty-*.zip
+            Hosty-*-Setup.exe
