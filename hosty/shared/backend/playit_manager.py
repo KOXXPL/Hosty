@@ -244,6 +244,10 @@ class PlayitManager(EventEmitter):
 
         return None
 
+    def _is_pinned_binary(self) -> bool:
+        marker = self.directory / ".playit-version"
+        return marker.exists() and marker.read_text(encoding="utf-8").strip() == "v0.17.1"
+
     def is_installed(self) -> bool:
         return self.resolve_binary() is not None
 
@@ -467,6 +471,9 @@ class PlayitManager(EventEmitter):
 
             if sys.platform != "win32":
                 target.chmod(0o755)
+
+            marker = target.parent / ".playit-version"
+            marker.write_text(version_tag, encoding="utf-8")
 
             return True, str(target)
         except Exception as e:
@@ -917,13 +924,13 @@ class PlayitManager(EventEmitter):
             if not binary:
                 return False, "playit binary not found"
 
-        # Check if current binary is v1.x (incompatible) and downgrade to v0.17.1
-        if binary and self._is_incompatible_version(binary):
+        # Ensure binary is pinned to v0.17.1 (marker avoids repeat downloads)
+        if binary and not self._is_pinned_binary():
             ok, msg = self._download_specific_version("v0.17.1")
             if ok:
                 binary = self.resolve_binary()
             else:
-                return False, f"Failed to downgrade playit to v0.17.1: {msg}"
+                return False, f"Failed to install playit v0.17.1: {msg}"
 
         provided_secret = str(secret or "").strip()
         existing_secret = self.read_claimed_secret()
@@ -1004,13 +1011,13 @@ class PlayitManager(EventEmitter):
             if not binary:
                 return False, "playit binary not found"
 
-        # Check if current binary is v1.x (incompatible) and downgrade to v0.17.1
-        if binary and self._is_incompatible_version(binary):
+        # Ensure binary is pinned to v0.17.1 (marker avoids repeat downloads)
+        if binary and not self._is_pinned_binary():
             ok, msg = self._download_specific_version("v0.17.1")
             if ok:
                 binary = self.resolve_binary()
             else:
-                return False, f"Failed to downgrade playit to v0.17.1: {msg}"
+                return False, f"Failed to install playit v0.17.1: {msg}"
 
         provided_secret = str(secret or "").strip()
         existing_secret = self.read_claimed_secret()
@@ -1071,13 +1078,13 @@ class PlayitManager(EventEmitter):
             if not binary:
                 return False, "playit binary not found"
 
-        # Check if current binary is v1.x (incompatible) and downgrade to v0.17.1
-        if binary and self._is_incompatible_version(binary):
+        # Ensure binary is pinned to v0.17.1 (marker avoids repeat downloads)
+        if binary and not self._is_pinned_binary():
             ok, msg = self._download_specific_version("v0.17.1")
             if ok:
                 binary = self.resolve_binary()
             else:
-                return False, f"Failed to downgrade playit to v0.17.1: {msg}"
+                return False, f"Failed to install playit v0.17.1: {msg}"
 
         provided_secret = str(secret or "").strip()
         existing_secret = self.read_claimed_secret()
