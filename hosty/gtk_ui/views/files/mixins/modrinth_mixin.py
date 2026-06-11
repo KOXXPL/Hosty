@@ -90,9 +90,6 @@ class ModrinthMixin:
             ("Modpacks", "modpack"),
             ("Datapacks", "datapack"),
         ]
-        type_dd = Gtk.DropDown.new_from_strings([x[0] for x in project_type_items])
-        type_dd.set_valign(Gtk.Align.CENTER)
-
         category_items = [
             ("Any category", ""),
             ("Optimization", "optimization"),
@@ -105,9 +102,6 @@ class ModrinthMixin:
             ("Worldgen", "worldgen"),
             ("Library", "library"),
         ]
-        cat_dd = Gtk.DropDown.new_from_strings([x[0] for x in category_items])
-        cat_dd.set_valign(Gtk.Align.CENTER)
-
         sort_items = [
             ("Relevance", "relevance"),
             ("Downloads", "downloads"),
@@ -115,45 +109,66 @@ class ModrinthMixin:
             ("Newest", "newest"),
             ("Recently updated", "updated"),
         ]
-        sort_dd = Gtk.DropDown.new_from_strings([x[0] for x in sort_items])
-        sort_dd.set_valign(Gtk.Align.CENTER)
-        sort_dd.set_selected(1)
+
+        selected_type_idx = [0]
+        selected_cat_idx = [0]
+        selected_sort_idx = [1]
+
+        def make_filter_buttons(items, default_idx):
+            buttons = []
+            group = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4, homogeneous=False)
+            for i, (label, _value) in enumerate(items):
+                btn = Gtk.ToggleButton(label=label)
+                btn.add_css_class("modrinth-filter-option")
+                btn.set_active(i == default_idx)
+                group.append(btn)
+                buttons.append(btn)
+            return group, buttons
+
+        def make_filter_flowbox(items, default_idx, max_cols):
+            buttons = []
+            group = Gtk.FlowBox()
+            group.set_max_children_per_line(max_cols)
+            group.set_selection_mode(Gtk.SelectionMode.NONE)
+            group.set_column_spacing(4)
+            group.set_row_spacing(4)
+            for i, (label, _value) in enumerate(items):
+                btn = Gtk.ToggleButton(label=label)
+                btn.add_css_class("modrinth-filter-option")
+                btn.set_active(i == default_idx)
+                group.append(btn)
+                buttons.append(btn)
+            return group, buttons
+
+        type_box, type_buttons = make_filter_buttons(project_type_items, 0)
+        cat_box, cat_buttons = make_filter_flowbox(category_items, 0, 4)
+        sort_box, sort_buttons = make_filter_flowbox(sort_items, 1, 3)
 
         # Set up Popover for filters
         filter_popover = Gtk.Popover()
         filter_btn.set_popover(filter_popover)
 
-        popover_content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        popover_content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         popover_content.set_margin_start(12)
         popover_content.set_margin_end(12)
         popover_content.set_margin_top(12)
         popover_content.set_margin_bottom(12)
 
-        popover_title = Gtk.Label(label="Filters")
-        popover_title.add_css_class("title-4")
-        popover_title.set_halign(Gtk.Align.START)
-        popover_content.append(popover_title)
-
-        filter_grid = Gtk.Grid()
-        filter_grid.set_row_spacing(10)
-        filter_grid.set_column_spacing(12)
-
         type_label = Gtk.Label(label="Type", xalign=0.0)
-        type_label.add_css_class("dim-label")
-        filter_grid.attach(type_label, 0, 0, 1, 1)
-        filter_grid.attach(type_dd, 1, 0, 1, 1)
+        type_label.add_css_class("modrinth-filter-label")
+        popover_content.append(type_label)
+        popover_content.append(type_box)
 
         cat_label = Gtk.Label(label="Category", xalign=0.0)
-        cat_label.add_css_class("dim-label")
-        filter_grid.attach(cat_label, 0, 1, 1, 1)
-        filter_grid.attach(cat_dd, 1, 1, 1, 1)
+        cat_label.add_css_class("modrinth-filter-label")
+        popover_content.append(cat_label)
+        popover_content.append(cat_box)
 
         sort_label = Gtk.Label(label="Sort by", xalign=0.0)
-        sort_label.add_css_class("dim-label")
-        filter_grid.attach(sort_label, 0, 2, 1, 1)
-        filter_grid.attach(sort_dd, 1, 2, 1, 1)
+        sort_label.add_css_class("modrinth-filter-label")
+        popover_content.append(sort_label)
+        popover_content.append(sort_box)
 
-        popover_content.append(filter_grid)
         filter_popover.set_child(popover_content)
 
         results = Gtk.ListBox()
@@ -170,19 +185,19 @@ class ModrinthMixin:
         state = {"offset": 0, "total": 0, "busy": False, "all_loaded": False}
 
         def selected_category() -> str:
-            idx = int(cat_dd.get_selected())
+            idx = selected_cat_idx[0]
             if idx < 0 or idx >= len(category_items):
                 return ""
             return category_items[idx][1]
 
         def selected_project_type() -> str:
-            idx = int(type_dd.get_selected())
+            idx = selected_type_idx[0]
             if idx < 0 or idx >= len(project_type_items):
                 return "mod"
             return project_type_items[idx][1]
 
         def selected_sort() -> str:
-            idx = int(sort_dd.get_selected())
+            idx = selected_sort_idx[0]
             if idx < 0 or idx >= len(sort_items):
                 return "downloads"
             return sort_items[idx][1]
@@ -190,9 +205,12 @@ class ModrinthMixin:
         def set_busy(busy: bool):
             state["busy"] = busy
             filter_btn.set_sensitive(not busy)
-            type_dd.set_sensitive(not busy)
-            cat_dd.set_sensitive(not busy)
-            sort_dd.set_sensitive(not busy)
+            for btn in type_buttons:
+                btn.set_sensitive(not busy)
+            for btn in cat_buttons:
+                btn.set_sensitive(not busy)
+            for btn in sort_buttons:
+                btn.set_sensitive(not busy)
             search_spinner.set_visible(busy)
             if busy:
                 search_spinner.start()
@@ -303,16 +321,25 @@ class ModrinthMixin:
 
         entry.connect("search-changed", trigger_search)
         entry.connect("activate", trigger_search)
-        type_dd.connect("notify::selected", trigger_search)
-        cat_dd.connect("notify::selected", trigger_search)
-        sort_dd.connect("notify::selected", trigger_search)
 
-        def close_filter_popover(*_):
-            filter_popover.popdown()
+        def wire_filter_buttons(buttons, selected_idx_ref):
+            def handle_click(btn, idx):
+                if btn.get_active():
+                    for j, other in enumerate(buttons):
+                        if j != idx:
+                            other.set_active(False)
+                    selected_idx_ref[0] = idx
+                    trigger_search()
+                    filter_btn.set_active(False)
+                else:
+                    btn.set_active(True)
 
-        type_dd.connect("notify::selected", close_filter_popover)
-        cat_dd.connect("notify::selected", close_filter_popover)
-        sort_dd.connect("notify::selected", close_filter_popover)
+            for i, btn in enumerate(buttons):
+                btn.connect("clicked", lambda b, idx=i: handle_click(b, idx))
+
+        wire_filter_buttons(type_buttons, selected_type_idx)
+        wire_filter_buttons(cat_buttons, selected_cat_idx)
+        wire_filter_buttons(sort_buttons, selected_sort_idx)
 
         sw = Gtk.ScrolledWindow()
         sw.set_vexpand(True)
